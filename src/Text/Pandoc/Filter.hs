@@ -27,7 +27,6 @@ import Text.Pandoc.Definition (Pandoc)
 import Text.Pandoc.Options (ReaderOptions)
 import Text.Pandoc.Logging
 import qualified Text.Pandoc.Filter.JSON as JSONFilter
-import qualified Text.Pandoc.Filter.Lua as LuaFilter
 import qualified Text.Pandoc.Filter.Path as Path
 import Data.YAML
 import qualified Data.Text as T
@@ -37,8 +36,7 @@ import Control.Monad.Trans (MonadIO (liftIO))
 import Control.Monad (foldM, when)
 
 -- | Type of filter and path to filter file.
-data Filter = LuaFilter FilePath
-            | JSONFilter FilePath
+data Filter = JSONFilter FilePath
             deriving (Show, Generic)
 
 instance FromYAML Filter where
@@ -47,14 +45,12 @@ instance FromYAML Filter where
     ty <- m .: "type"
     fp <- m .: "path"
     case ty of
-      "lua"  -> return $ LuaFilter $ T.unpack fp
       "json" -> return $ JSONFilter $ T.unpack fp
       _      -> fail $ "Unknown filter type " ++ show (ty :: T.Text)) node
   <|>
   (withStr "Filter" $ \t -> do
     let fp = T.unpack t
     case takeExtension fp of
-      ".lua"  -> return $ LuaFilter fp
       _       -> return $ JSONFilter fp) node
 
 -- | Modify the given document using a filter.
@@ -69,8 +65,6 @@ applyFilters ropts filters args d = do
  where
   applyFilter doc (JSONFilter f) =
     withMessages f $ JSONFilter.apply ropts args f doc
-  applyFilter doc (LuaFilter f)  =
-    withMessages f $ LuaFilter.apply ropts args f doc
   withMessages f action = do
     verbosity <- getVerbosity
     when (verbosity == INFO) $ report $ RunningFilter f
@@ -83,7 +77,6 @@ applyFilters ropts filters args d = do
 
 -- | Expand paths of filters, searching the data directory.
 expandFilterPath :: Filter -> PandocIO Filter
-expandFilterPath (LuaFilter fp) = LuaFilter <$> Path.expandFilterPath fp
 expandFilterPath (JSONFilter fp) = JSONFilter <$> Path.expandFilterPath fp
 
 $(deriveJSON defaultOptions ''Filter)
